@@ -9,7 +9,8 @@ using Node = TrieNode<Symbol, Value>;
 private:
 	std::vector<Symbol>	symbols;	/* sorted vector of symbols */
 	std::vector<Node *>	nodes;		/* same order as symbols */
-	Value				value;
+	std::vector<Value>	values;		/* same order as symbols */
+	/* TODO: add nulls vector */
 
 public:
 	~TrieNode() { /* TODO */ }
@@ -32,20 +33,24 @@ public:
 		/* If node doesn't yes exist insert a new one */
 		if (!exists)
 		{
-			Node *child = new Node();
+			//Node *child = new Node();
 
 			symbols.insert(symbols.begin() + i, string[0]);
-			nodes.insert(nodes.begin() + i, child);
+			nodes.insert(nodes.begin() + i, NULL);
+			values.insert(values.begin() + i, 0);
 		}
 
 		/* Last symbol? Save value to this node and quit */
 		if (len == 1)
 		{
-			this->value = v;
+				values[i] = v;
+				//this->value = v;
 		}
 		/* Else traverse further */
 		else
 		{
+			if (!nodes[i])
+				nodes[i] = new Node();
 			nodes[i]->insert(string + 1, len - 1, v);
 		}	
 	}
@@ -56,7 +61,8 @@ public:
 	 */
 	bool find(Symbol *key, Value &value)
 	{
-		int		i = 0;
+		int		i = 0,
+				j;
 		bool	exists = false;
 		size_t	key_len = strlen(key);
 		Node	*cur,
@@ -64,11 +70,11 @@ public:
 
 		while (i < key_len)
 		{
-			int j = 0;
-
+			if (!next)	return false;
 			cur = next;
+
 			/* TODO: rewrite using binary search */
-			for (; j < cur->symbols.size(); j++)
+			for (j = 0; j < cur->symbols.size(); j++)
 			{
 				if (key[i] <= cur->symbols[j])
 				{
@@ -86,7 +92,7 @@ public:
 			i++;
 		}
 
-		value = cur->value;
+		value = cur->values[j];
 		return true;
 	}
 };
