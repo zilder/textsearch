@@ -105,9 +105,25 @@ public:
 		f.close();
 	}
 
+	static Node *load()
+	{
+		Node			*node;
+		std::ifstream	f("trie.pref", std::ifstream::binary);
+
+		node = read_recursively(f);
+		f.close();
+
+		return node;
+	}
+
 private:
 	void write_recursively(std::ofstream &f, Node *node)
 	{
+		uint16_t	nelems = node->symbols.size();
+
+		/* Write number of elements first */
+		f.write((char *) &nelems, sizeof(uint16_t));
+
 		for (int i = 0; i < node->symbols.size(); i++)
 		{
 			/* TODO: what maximum number of children could be? */
@@ -116,11 +132,45 @@ private:
 
 			f.write((char *) &node->symbols[i], sizeof(Symbol));
 			f.write((char *) &node->values[i], sizeof(Value));
-			f.write((char *) &nchildren, sizeof(uint16_t));
+			//f.write((char *) &nchildren, sizeof(uint16_t));
 
 			if (node->nodes[i])
 				write_recursively(f, node->nodes[i]);
+			else
+			{
+				/* If there are no children */
+				uint16_t zero = 0;
+				f.write((char *) &zero, sizeof(uint16_t));
+			}
 		}
+	}
+
+	static Node *read_recursively(std::ifstream &f)
+	{
+		uint16_t	nelems;
+		Node		*node;
+		
+		f.read((char *) &nelems, sizeof(uint16_t));
+
+		if (nelems == 0)
+			return NULL;
+
+		node = new Node();
+		for (int i = 0; i < nelems; i++)
+		{
+			Symbol	s;
+			Value	v;
+			Node    *n;
+
+			f.read((char *) &s, sizeof(Symbol));
+			f.read((char *) &v, sizeof(Value));
+
+			node->symbols.push_back(s);
+			node->values.push_back(v);
+			node->nodes.push_back(read_recursively(f));
+		}
+
+		return node;
 	}
 };
 
@@ -142,10 +192,16 @@ main()
 	trie.insert(word2, 3, 456);
 
 	if (trie.find(word1, value))
-		printf("Yes! Value is: %u", value);
+		printf("Yes! Value is: %u\n", value);
 	else
 		printf("Something's wrong");
 
 	trie.save();
+
+	auto new_trie = TrieNode<char, uint32_t>::load();
+	if (new_trie->find(word2, value))
+		printf("Load ok! Value: %u\n", value);
+	else
+		printf("Load failed");
 }
 
