@@ -1,12 +1,13 @@
 #include <stdio.h>
 #include <vector>
+#include <fstream>
 
 template<class Symbol, class Value>
 class TrieNode
 {
 using Node = TrieNode<Symbol, Value>;
 
-private:
+protected:
 	std::vector<Symbol>	symbols;	/* sorted vector of symbols */
 	std::vector<Node *>	nodes;		/* same order as symbols */
 	std::vector<Value>	values;		/* same order as symbols */
@@ -95,6 +96,32 @@ public:
 		value = cur->values[j];
 		return true;
 	}
+
+	void save()
+	{
+		std::ofstream f("trie.pref", std::ofstream::binary);
+
+		write_recursively(f, this);
+		f.close();
+	}
+
+private:
+	void write_recursively(std::ofstream &f, Node *node)
+	{
+		for (int i = 0; i < node->symbols.size(); i++)
+		{
+			/* TODO: what maximum number of children could be? */
+			uint16_t nchildren = node->nodes[i] ?
+									node->nodes[i]->symbols.size() : 0;
+
+			f.write((char *) &node->symbols[i], sizeof(Symbol));
+			f.write((char *) &node->values[i], sizeof(Value));
+			f.write((char *) &nchildren, sizeof(uint16_t));
+
+			if (node->nodes[i])
+				write_recursively(f, node->nodes[i]);
+		}
+	}
 };
 
 int
@@ -118,5 +145,7 @@ main()
 		printf("Yes! Value is: %u", value);
 	else
 		printf("Something's wrong");
+
+	trie.save();
 }
 
