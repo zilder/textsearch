@@ -1,2 +1,2 @@
 all:
-	g++ ts.cpp -o ts -std=c++11 -g3
+	g++ ts.cpp -o bin/ts -std=c++11 -g3

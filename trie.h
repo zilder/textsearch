@@ -16,7 +16,7 @@ protected:
 public:
 	~TrieNode() { /* TODO */ }
 
-	void insert(Symbol *string, size_t len, Value v)
+	void insert(const Symbol *string, size_t len, Value v)
 	{
 		int		i = 0;
 		bool	exists = false;
@@ -34,8 +34,6 @@ public:
 		/* If node doesn't yes exist insert a new one */
 		if (!exists)
 		{
-			//Node *child = new Node();
-
 			symbols.insert(symbols.begin() + i, string[0]);
 			nodes.insert(nodes.begin() + i, NULL);
 			values.insert(values.begin() + i, 0);
@@ -45,7 +43,6 @@ public:
 		if (len == 1)
 		{
 				values[i] = v;
-				//this->value = v;
 		}
 		/* Else traverse further */
 		else
@@ -60,7 +57,7 @@ public:
 	 * Find value by given key. Returns true if key was found and false
 	 * otherwise
 	 */
-	bool find(Symbol *key, Value &value)
+	bool find(const Symbol *key, Value &value)
 	{
 		int		i = 0,
 				j;
@@ -132,7 +129,6 @@ private:
 
 			f.write((char *) &node->symbols[i], sizeof(Symbol));
 			f.write((char *) &node->values[i], sizeof(Value));
-			//f.write((char *) &nchildren, sizeof(uint16_t));
 
 			if (node->nodes[i])
 				write_recursively(f, node->nodes[i]);
@@ -173,35 +169,3 @@ private:
 		return node;
 	}
 };
-
-int
-main()
-{
-	TrieNode<char, uint32_t> trie;
-	char word1[32];
-	char word2[32];
-	char word3[32];
-	uint32_t value;
-
-	printf("Trie test\n");
-
-	strcpy(word1, "abc");
-	strcpy(word2, "ass");
-	strcpy(word3, "asd");
-	trie.insert(word1, 3, 123);
-	trie.insert(word2, 3, 456);
-
-	if (trie.find(word1, value))
-		printf("Yes! Value is: %u\n", value);
-	else
-		printf("Something's wrong");
-
-	trie.save();
-
-	auto new_trie = TrieNode<char, uint32_t>::load();
-	if (new_trie->find(word2, value))
-		printf("Load ok! Value: %u\n", value);
-	else
-		printf("Load failed");
-}
-
