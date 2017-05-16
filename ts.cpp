@@ -5,6 +5,7 @@
 #include <iostream>
 #include <list>
 #include <fstream>
+#include <algorithm>
 
 #include "trie.h"
 
@@ -13,6 +14,8 @@ typedef TrieNode<char, uint32_t> PrefixTree;
 
 /* Postings length type */
 typedef uint32_t PSize;
+
+#define MAX_PREFIX_LEN	3
 
 
 class BulkLoader
@@ -52,6 +55,9 @@ public:
 		TrieNode<char, uint32_t>	trie;
 		std::ofstream 				f("dict", std::ofstream::binary);
 		char						nullstr[1] = {'\0'};
+		char						prefix[MAX_PREFIX_LEN] = {'\0'};
+		bool						prefix_changed = false;
+		uint8_t						prefix_len;
 
 		for (auto const &p: words)
 		{
@@ -60,19 +66,48 @@ public:
 
 			/* Key parts */
 			const std::string	&word = p.first;
-			std::string			prefix = word.substr(0, 3);
 			const char			*rest;
 			uint16_t			rest_len;
 
+			/*
+			 * Do we need to put another prefix into trie? And if we do
+			 * then what prefix should it be and what is its length?
+			 */
+			prefix_changed = false;
+			prefix_len = MAX_PREFIX_LEN;
+			for (uint8_t i = 0; i < MAX_PREFIX_LEN; i++)
+			{
+				char cur = (i < word.length()) ? word[i] : '\0';
+
+				if (cur != prefix[i])
+					prefix_changed = true;
+				prefix[i] = cur;
+
+				if (i >= word.length())
+					prefix_len = std::min(prefix_len, i);
+			}
+
 			/* Put prefix to trie */
-			trie.insert(prefix.c_str(), prefix.length(), (uint32_t) f.tellp());
+			if (prefix_changed)
+			{
+				/* TODO: write a separator between groups of words */
+				trie.insert(prefix, prefix_len, (uint32_t) f.tellp());
+			}
 
 			/*
 			 * If word is long enough then take rest part of the word. Else
 			 * it's an empty string
 			 */
-			rest = word.length() > 3 ? word.c_str() + 3 : nullstr;
-			rest_len = word.length() > 3 ? word.length() - 3 : 0;
+			if (prefix_len < MAX_PREFIX_LEN)
+			{
+				rest = nullstr;
+				rest_len = 0;
+			}
+			else
+			{
+				rest = word.c_str() + 3;
+				rest_len = word.length() - MAX_PREFIX_LEN;
+			}
 
 			/* Write word length and word itself */
 			f.write((char *) &rest_len, sizeof(uint16_t));
