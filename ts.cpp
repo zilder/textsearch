@@ -50,14 +50,18 @@ public:
 		}
 	}
 
-	void write()
+	void write(const char *name)
 	{
 		TrieNode<char, uint32_t>	trie;
-		std::ofstream 				f("dict", std::ofstream::binary);
+		char						dict_filename[32];
+		std::ofstream 				f;
 		char						nullstr[1] = {'\0'};
 		char						prefix[MAX_PREFIX_LEN] = {'\0'};
 		bool						prefix_changed = false;
 		uint8_t						prefix_len;
+
+		sprintf(dict_filename, "%s.dict", name);
+		f.open(dict_filename, std::ofstream::binary);
 
 		for (auto const &p: words)
 		{
@@ -90,7 +94,16 @@ public:
 			/* Put prefix to trie */
 			if (prefix_changed)
 			{
-				/* TODO: write a separator between groups of words */
+				uint32_t	zero;
+
+				/*
+				 * Write a separator - zero length word with zero length
+				 * postings list
+				 */
+				f.write((char *) &zero, sizeof(uint16_t));
+				f.write((char *) &zero, sizeof(PSize));
+
+				/* Put prefix to the trie */
 				trie.insert(prefix, prefix_len, (uint32_t) f.tellp());
 			}
 
@@ -120,19 +133,28 @@ public:
 				f.write((char *) &docId, sizeof(uint32_t));
 		}
 
-		trie.save();
+		trie.save(name);
 	}
 };
 
 class Storage
 {
 private:
-	PrefixTree *prefixes;
+	PrefixTree	*prefixes;
+	char		*name;
 public:
-	Storage()
+	Storage(const char *storage_name)
 	{
+		name = (char *) malloc(strlen(storage_name));	/* name + .dict */
+		strcpy(name, storage_name);
+
 		/* Load prefix tree */
-		prefixes = PrefixTree::load();
+		prefixes = PrefixTree::load(storage_name);
+	}
+
+	~Storage()
+	{
+		free(name);
 	}
 
 	/*
@@ -140,14 +162,18 @@ public:
 	 */
 	uint32_t find(std::string key, std::vector<uint32_t> &postings)
 	{
-		std::string		prefix = key.substr(0, 3);
+		char			dict_filename[32];
+		std::string		prefix = key.substr(0, MAX_PREFIX_LEN);
 		uint32_t		offset;
+
+		sprintf(dict_filename, "%s.dict", this->name);
 
 		if (prefixes->find(prefix.c_str(), offset))
 		{
-			std::ifstream	f("dict", std::ofstream::binary);
+			/* TODO: should we open file in the constructor? */
+			std::ifstream	f(dict_filename, std::ofstream::binary);
 			uint16_t		buf_len;
-			char 			buffer[32];
+			char 			buffer[32]; /* TODO */
 			PSize			psize;		/* postings vector size */
 
 			f.seekg(offset);
@@ -195,9 +221,9 @@ main()
 	loader.insert(phrase1, 0);
 	loader.insert(phrase2, 1);
 	loader.print();
-	loader.write();
+	loader.write("123");
 
-	Storage s;
+	Storage s("123");
 	std::vector<uint32_t> postings;
 
 	print_postings(s, "dog");

@@ -94,18 +94,26 @@ public:
 		return true;
 	}
 
-	void save()
+	void save(const char *name)
 	{
-		std::ofstream f("trie.pref", std::ofstream::binary);
+		char			fname[32];
+		std::ofstream	f;
+
+		sprintf(fname, "%s.pref", name);
+		f.open(fname, std::ofstream::binary);
 
 		write_recursively(f, this);
 		f.close();
 	}
 
-	static Node *load()
+	static Node *load(const char *name)
 	{
 		Node			*node;
-		std::ifstream	f("trie.pref", std::ifstream::binary);
+		char			fname[32];
+		std::ifstream	f;
+
+		sprintf(fname, "%s.pref", name);
+		f.open(fname, std::ifstream::binary);
 
 		node = read_recursively(f);
 		f.close();
