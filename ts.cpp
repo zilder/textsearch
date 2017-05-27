@@ -24,16 +24,16 @@ typedef struct
 	uint16_t	length : 15;	/* String length */
 } DictRecord;
 
-#define InitSeparator(r)	\
-	do {					\
-		(r).separator = 1;	\
-		(r).length = 0;		\
+#define InitSeparator(r)		\
+	do {						\
+		(r).separator = 1;		\
+		(r).length = 0;			\
 	} while (0)
 
 #define InitDictRecord(r, l)	\
-	do {					\
-		(r).separator = 0;	\
-		(r).length = (l);	\
+	do {						\
+		(r).separator = 0;		\
+		(r).length = (l);		\
 	} while (0)
 
 
@@ -118,14 +118,10 @@ public:
 			/* Put prefix to trie */
 			if (prefix_changed)
 			{
-				// uint32_t	zero;
-
 				/*
 				 * Write a separator - zero length word with zero length
 				 * postings list
 				 */
-				// fdict.write((char *) &zero, sizeof(uint16_t));
-				// fdict.write((char *) &zero, sizeof(PSize));
 				InitSeparator(record);
 				fdict.write((char *) &record, sizeof(DictRecord));
 
@@ -150,7 +146,6 @@ public:
 
 			/* Write word and offset in postings list*/
 			InitDictRecord(record, rest_len);
-			// fdict.write((char *) &rest_len, sizeof(uint16_t));
 			fdict.write((char *) &record, sizeof(DictRecord));
 			if (rest_len > 0)
 				fdict.write(rest, rest_len * sizeof(char)); /* keep in mind that it won't be char in future */
@@ -194,6 +189,7 @@ public:
 	{
 		char			filename[32];
 		std::string		prefix = key.substr(0, MAX_PREFIX_LEN);
+		std::string		rest;
 		uint32_t		dict_offset,
 						post_offset;
 
@@ -202,10 +198,14 @@ public:
 			/* TODO: should we open file in the constructor? */
 			std::ifstream	fdict,
 							fpost;
-			// uint16_t		buf_len;
 			char 			buffer[32]; /* TODO */
 			PSize			psize;		/* postings vector size */
 			DictRecord		record;
+
+			if (prefix.length() >= MAX_PREFIX_LEN)
+				rest = key.substr(MAX_PREFIX_LEN);
+			else
+				rest = "";
 
 			sprintf(filename, "%s.dict", this->name);
 			fdict.open(filename, std::ofstream::binary);
@@ -214,23 +214,50 @@ public:
 			fpost.open(filename, std::ofstream::binary);
 
 			fdict.seekg(dict_offset);
-			// f.read((char *) &buf_len, sizeof(uint16_t));
-			fdict.read((char *) &record, sizeof(DictRecord));
-			fdict.read(buffer, record.length * sizeof(char));
-			fdict.read((char *) &post_offset, sizeof(uint32_t));
-
-			fpost.seekg(post_offset);
-			fpost.read((char *) &psize, sizeof(PSize));
-
-			for (int i = 0; i < psize; i++)
+			while (1)
 			{
-				uint32_t value;
+				fdict.read((char *) &record, sizeof(DictRecord));
 
-				fpost.read((char *) &value, sizeof(uint32_t));
-				postings.push_back(value);
+				/* If found a separator of EOF then quit */
+				if (record.separator || fdict.eof())
+					return 0;
+
+				/* Strings size don't match, preceed with the next word */
+				if (rest.length() != record.length)
+				{
+					fdict.seekg(record.length * sizeof(char) + sizeof(size_t),
+								std::ios_base::cur);
+					continue;
+				}
+
+				/* Compare strings */
+				if (record.length > 0)
+				{
+					fdict.read(buffer, record.length * sizeof(char));
+					if (memcmp(buffer, rest.c_str(), record.length))
+					{
+						fdict.seekg(record.length * sizeof(char) + sizeof(size_t),
+									std::ios_base::cur);
+						continue;
+					}
+				}
+
+				/* Offset in postings file */
+				fdict.read((char *) &post_offset, sizeof(uint32_t));
+
+				/* Read postings */
+				fpost.seekg(post_offset);
+				fpost.read((char *) &psize, sizeof(PSize));
+				for (int i = 0; i < psize; i++)
+				{
+					uint32_t value;
+
+					fpost.read((char *) &value, sizeof(uint32_t));
+					postings.push_back(value);
+				}
+
+				return psize;
 			}
-
-			return psize;
 		}
 		return 0;
 	}
@@ -256,8 +283,10 @@ main()
 	char phrase2[80];
 	BulkLoader loader;
 
-	strcpy(phrase1, "brown fox jumps over lazy dog");
-	strcpy(phrase2, "brown dog saw a fox");
+	// strcpy(phrase1, "brown fox jumps over lazy dog");
+	// strcpy(phrase2, "brown dog saw a fox");
+	strcpy(phrase1, "cannot predict this");
+	strcpy(phrase2, "i would prefer");
 
 	loader.insert(phrase1, 0);
 	loader.insert(phrase2, 1);
@@ -267,9 +296,11 @@ main()
 	Storage s("123");
 	std::vector<uint32_t> postings;
 
-	print_postings(s, "dog");
-	print_postings(s, "saw");
-	print_postings(s, "lazy");
+	// print_postings(s, "dog");
+	// print_postings(s, "saw");
+	// print_postings(s, "lazy");
+	print_postings(s, "predict");
+	print_postings(s, "prefer");
 }
 
 
