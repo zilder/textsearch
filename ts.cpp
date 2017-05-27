@@ -18,6 +18,25 @@ typedef uint32_t PSize;
 #define MAX_PREFIX_LEN	3
 
 
+typedef struct
+{
+	uint16_t	separator : 1;	/* Is record a separator? */
+	uint16_t	length : 15;	/* String length */
+} DictRecord;
+
+#define InitSeparator(r)	\
+	do {					\
+		(r).separator = 1;	\
+		(r).length = 0;		\
+	} while (0)
+
+#define InitDictRecord(r, l)	\
+	do {					\
+		(r).separator = 0;	\
+		(r).length = (l);	\
+	} while (0)
+
+
 class BulkLoader
 {
 	using Map = std::map<std::string, std::list<uint32_t> >;
@@ -53,15 +72,18 @@ public:
 	void write(const char *name)
 	{
 		TrieNode<char, uint32_t>	trie;
-		char						dict_filename[32];
-		std::ofstream 				f;
+		char						filename[32];
+		std::ofstream 				fdict;	/* dictionary file */
+		std::ofstream				fpost;	/* postings file */
 		char						nullstr[1] = {'\0'};
 		char						prefix[MAX_PREFIX_LEN] = {'\0'};
 		bool						prefix_changed = false;
 		uint8_t						prefix_len;
 
-		sprintf(dict_filename, "%s.dict", name);
-		f.open(dict_filename, std::ofstream::binary);
+		sprintf(filename, "%s.dict", name);
+		fdict.open(filename, std::ofstream::binary);
+		sprintf(filename, "%s.post", name);
+		fpost.open(filename, std::ofstream::binary);
 
 		for (auto const &p: words)
 		{
@@ -72,6 +94,8 @@ public:
 			const std::string	&word = p.first;
 			const char			*rest;
 			uint16_t			rest_len;
+			DictRecord			record;
+			size_t				poffset;
 
 			/*
 			 * Do we need to put another prefix into trie? And if we do
@@ -94,17 +118,19 @@ public:
 			/* Put prefix to trie */
 			if (prefix_changed)
 			{
-				uint32_t	zero;
+				// uint32_t	zero;
 
 				/*
 				 * Write a separator - zero length word with zero length
 				 * postings list
 				 */
-				f.write((char *) &zero, sizeof(uint16_t));
-				f.write((char *) &zero, sizeof(PSize));
+				// fdict.write((char *) &zero, sizeof(uint16_t));
+				// fdict.write((char *) &zero, sizeof(PSize));
+				InitSeparator(record);
+				fdict.write((char *) &record, sizeof(DictRecord));
 
 				/* Put prefix to the trie */
-				trie.insert(prefix, prefix_len, (uint32_t) f.tellp());
+				trie.insert(prefix, prefix_len, (uint32_t) fdict.tellp());
 			}
 
 			/*
@@ -122,15 +148,19 @@ public:
 				rest_len = word.length() - MAX_PREFIX_LEN;
 			}
 
-			/* Write word length and word itself */
-			f.write((char *) &rest_len, sizeof(uint16_t));
+			/* Write word and offset in postings list*/
+			InitDictRecord(record, rest_len);
+			// fdict.write((char *) &rest_len, sizeof(uint16_t));
+			fdict.write((char *) &record, sizeof(DictRecord));
 			if (rest_len > 0)
-				f.write(rest, rest_len * sizeof(char)); /* keep in mind that it won't be char in future */
+				fdict.write(rest, rest_len * sizeof(char)); /* keep in mind that it won't be char in future */
+			poffset = fpost.tellp();
+			fdict.write((char *) &poffset, sizeof(size_t));
 
 			/* Write postings list */
-			f.write((char *) &psize, sizeof(PSize));
+			fpost.write((char *) &psize, sizeof(PSize));
 			for (auto docId: postings)
-				f.write((char *) &docId, sizeof(uint32_t));
+				fpost.write((char *) &docId, sizeof(uint32_t));
 		}
 
 		trie.save(name);
@@ -162,30 +192,41 @@ public:
 	 */
 	uint32_t find(std::string key, std::vector<uint32_t> &postings)
 	{
-		char			dict_filename[32];
+		char			filename[32];
 		std::string		prefix = key.substr(0, MAX_PREFIX_LEN);
-		uint32_t		offset;
+		uint32_t		dict_offset,
+						post_offset;
 
-		sprintf(dict_filename, "%s.dict", this->name);
-
-		if (prefixes->find(prefix.c_str(), offset))
+		if (prefixes->find(prefix.c_str(), dict_offset))
 		{
 			/* TODO: should we open file in the constructor? */
-			std::ifstream	f(dict_filename, std::ofstream::binary);
-			uint16_t		buf_len;
+			std::ifstream	fdict,
+							fpost;
+			// uint16_t		buf_len;
 			char 			buffer[32]; /* TODO */
 			PSize			psize;		/* postings vector size */
+			DictRecord		record;
 
-			f.seekg(offset);
-			f.read((char *) &buf_len, sizeof(uint16_t));
-			f.read(buffer, buf_len * sizeof(char));
-			f.read((char *) &psize, sizeof(PSize));
+			sprintf(filename, "%s.dict", this->name);
+			fdict.open(filename, std::ofstream::binary);
+
+			sprintf(filename, "%s.post", this->name);
+			fpost.open(filename, std::ofstream::binary);
+
+			fdict.seekg(dict_offset);
+			// f.read((char *) &buf_len, sizeof(uint16_t));
+			fdict.read((char *) &record, sizeof(DictRecord));
+			fdict.read(buffer, record.length * sizeof(char));
+			fdict.read((char *) &post_offset, sizeof(uint32_t));
+
+			fpost.seekg(post_offset);
+			fpost.read((char *) &psize, sizeof(PSize));
 
 			for (int i = 0; i < psize; i++)
 			{
 				uint32_t value;
 
-				f.read((char *) &value, sizeof(uint32_t));
+				fpost.read((char *) &value, sizeof(uint32_t));
 				postings.push_back(value);
 			}
 

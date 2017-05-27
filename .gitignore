@@ -1,3 +1,8 @@
 *.dSYM
 *.swp
 bin
+
+# data files
+*.dict
+*.post
+*.pref
