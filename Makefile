@@ -1,2 +1,6 @@
+CC = g++
+CFLAGS = -std=c++11 -g3
+SOURCES = main.cpp inverted.cpp
+
 all:
-	g++ ts.cpp -o bin/ts -std=c++11 -g3
+	$(CC) $(SOURCES) -o bin/ts $(CFLAGS)
