@@ -60,7 +60,7 @@ public:
 	bool find(const Symbol *key, Value &value)
 	{
 		int		i = 0,
-				j;
+				pos;
 		bool	exists = false;
 		size_t	key_len = strlen(key);
 		Node	*cur,
@@ -71,26 +71,16 @@ public:
 			if (!next)	return false;
 			cur = next;
 
-			/* TODO: rewrite using binary search */
-			for (j = 0; j < cur->symbols.size(); j++)
-			{
-				if (key[i] <= cur->symbols[j])
-				{
-					exists = (key[i] == cur->symbols[j]);
-					break;
-				}
-			}
-
 			/* If at some point we couldn't find key symbol then quit */
-			if (!exists)
+			if ((pos = bsearch(cur->symbols, key[i])) < 0)
 				return false;
 
 			/* Get the next node */
-			next = cur->nodes[j];
+			next = cur->nodes[pos];
 			i++;
 		}
 
-		value = cur->values[j];
+		value = cur->values[pos];
 		return true;
 	}
 
@@ -122,6 +112,34 @@ public:
 	}
 
 private:
+	static int bsearch(std::vector<Symbol> &symbols, const Symbol &val)
+	{
+		int		start = 0,
+				end = symbols.size(),
+				pos;
+
+		while (start < end)
+		{
+			pos = (end - start) / 2;
+
+			/* Found? */
+			if (symbols[pos] == val)
+				return pos;
+
+			/* Final case, quit */
+			if (start == end)
+				break;
+
+			/* Shift boundaries */
+			if (symbols[pos] > val)
+				start = pos + 1;
+			else
+				end = pos - 1;
+		}
+
+		return -1;
+	}
+
 	void write_recursively(std::ofstream &f, Node *node)
 	{
 		uint16_t	nelems = node->symbols.size();
