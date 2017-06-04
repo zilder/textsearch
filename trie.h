@@ -1,6 +1,10 @@
+#include <cassert>
+#include <fstream>
 #include <stdio.h>
 #include <vector>
-#include <fstream>
+
+#define DEBUG 1
+
 
 template<class Symbol, class Value>
 class TrieNode
@@ -18,38 +22,37 @@ public:
 
 	void insert(const Symbol *string, size_t len, Value v)
 	{
-		int		i = 0;
+		int		pos = 0;
 		bool	exists = false;
 
-		/* TODO: rewrite using binary search */
-		for (; i < symbols.size(); i++)
-		{
-			if (string[0] <= symbols[i])
-			{
-				exists = (string[0] == symbols[i]);
-				break;
-			}
-		}
+		/* Find key position */
+		pos = bsearch(symbols, string[0], &exists);
 
 		/* If node doesn't yes exist insert a new one */
 		if (!exists)
 		{
-			symbols.insert(symbols.begin() + i, string[0]);
-			nodes.insert(nodes.begin() + i, NULL);
-			values.insert(values.begin() + i, 0);
+			symbols.insert(symbols.begin() + pos, string[0]);
+			nodes.insert(nodes.begin() + pos, NULL);
+			values.insert(values.begin() + pos, 0);
+
+			#ifdef DEBUG
+			debug_check_order();
+			#endif
 		}
 
 		/* Last symbol? Save value to this node and quit */
 		if (len == 1)
 		{
-				values[i] = v;
+				values[pos] = v;
 		}
 		/* Else traverse further */
 		else
 		{
-			if (!nodes[i])
-				nodes[i] = new Node();
-			nodes[i]->insert(string + 1, len - 1, v);
+			if (!nodes[pos])
+				nodes[pos] = new Node();
+
+			/* TODO: replace recursion with loop */
+			nodes[pos]->insert(string + 1, len - 1, v);
 		}	
 	}
 
@@ -61,7 +64,7 @@ public:
 	{
 		int		i = 0,
 				pos;
-		bool	exists = false;
+		bool	exists;
 		size_t	key_len = strlen(key);
 		Node	*cur,
 				*next = this;
@@ -72,7 +75,8 @@ public:
 			cur = next;
 
 			/* If at some point we couldn't find key symbol then quit */
-			if ((pos = bsearch(cur->symbols, key[i])) < 0)
+			pos = bsearch(cur->symbols, key[i], &exists);
+			if (!exists)
 				return false;
 
 			/* Get the next node */
@@ -112,32 +116,56 @@ public:
 	}
 
 private:
-	static int bsearch(std::vector<Symbol> &symbols, const Symbol &val)
+	static int bsearch(const std::vector<Symbol> &symbols,
+					   const Symbol &val,
+					   bool *found)
 	{
 		int		start = 0,
-				end = symbols.size(),
+				end = symbols.size() - 1,
 				pos;
 
-		while (start < end)
+		/* Trivial case */
+		if (symbols.empty())
 		{
-			pos = (end - start) / 2;
+			*found = false;
+			return 0;
+		}
+
+		/* Start binary search */
+		while (start <= end)
+		{
+			pos = start + (end - start) / 2;
 
 			/* Found? */
 			if (symbols[pos] == val)
+			{
+				*found = true;
 				return pos;
+			}
 
 			/* Final case, quit */
 			if (start == end)
 				break;
 
 			/* Shift boundaries */
-			if (symbols[pos] > val)
+			if (val > symbols[pos])
 				start = pos + 1;
 			else
 				end = pos - 1;
 		}
 
-		return -1;
+		/*
+		 * We didn't find key, but at least we could determine position
+		 * where it should go. Here are two options: either key is less than
+		 * symbols[pos] meaning 'pos' is right position to insert new node;
+		 * or key is greater than symbols[pos] meaning that we should insert
+		 * new node right after it
+		 */
+		if (val > symbols[pos])
+			pos++;
+
+		*found = false;
+		return pos;
 	}
 
 	void write_recursively(std::ofstream &f, Node *node)
@@ -193,5 +221,15 @@ private:
 		}
 
 		return node;
+	}
+
+	/* Check ordering */
+	void debug_check_order()
+	{
+		if (symbols.size() > 1)
+		{
+			for (int i = 1; i < symbols.size(); i++)
+				assert(symbols[i] > symbols[i - 1]);
+		}
 	}
 };
