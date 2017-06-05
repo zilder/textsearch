@@ -160,7 +160,29 @@ InvertedIndex::InvertedIndex(const char *storage_name)
 
 InvertedIndex::~InvertedIndex()
 {
+	if (initialized)
+	{
+		dict_file.close();
+		post_file.close();
+	}
 	free(name);
+}
+
+void InvertedIndex::init()
+{
+	char	filename[32];
+
+	/*
+	 * TODO: put barrier in caller or something in case it will be used in
+	 * multithread environment
+	 */
+	sprintf(filename, "%s.dict", this->name);
+	dict_file.open(filename, std::ofstream::binary);
+
+	sprintf(filename, "%s.post", this->name);
+	post_file.open(filename, std::ofstream::binary);
+
+	initialized = true;
 }
 
 /*
@@ -168,7 +190,6 @@ InvertedIndex::~InvertedIndex()
  */
 uint32_t InvertedIndex::find(std::string key, std::vector<uint32_t> &postings)
 {
-	char			filename[32];
 	std::string		prefix = key.substr(0, MAX_PREFIX_LEN);
 	std::string		rest;
 	uint32_t		dict_offset,
@@ -176,9 +197,6 @@ uint32_t InvertedIndex::find(std::string key, std::vector<uint32_t> &postings)
 
 	if (prefixes->find(prefix.c_str(), dict_offset))
 	{
-		/* TODO: should we open file in the constructor? */
-		std::ifstream	fdict,
-						fpost;
 		char 			buffer[32]; /* TODO */
 		PSize			psize;		/* postings vector size */
 		DictRecord		record;
@@ -188,25 +206,22 @@ uint32_t InvertedIndex::find(std::string key, std::vector<uint32_t> &postings)
 		else
 			rest = "";
 
-		sprintf(filename, "%s.dict", this->name);
-		fdict.open(filename, std::ofstream::binary);
+		if (!initialized)
+			init();
 
-		sprintf(filename, "%s.post", this->name);
-		fpost.open(filename, std::ofstream::binary);
-
-		fdict.seekg(dict_offset);
+		dict_file.seekg(dict_offset);
 		while (1)
 		{
-			fdict.read((char *) &record, sizeof(DictRecord));
+			dict_file.read((char *) &record, sizeof(DictRecord));
 
 			/* If found a separator of EOF then quit */
-			if (record.separator || fdict.eof())
+			if (record.separator || dict_file.eof())
 				return 0;
 
 			/* Strings size don't match, preceed with the next word */
 			if (rest.length() != record.length)
 			{
-				fdict.seekg(record.length * sizeof(char) + sizeof(size_t),
+				dict_file.seekg(record.length * sizeof(char) + sizeof(size_t),
 							std::ios_base::cur);
 				continue;
 			}
@@ -214,26 +229,26 @@ uint32_t InvertedIndex::find(std::string key, std::vector<uint32_t> &postings)
 			/* Compare strings */
 			if (record.length > 0)
 			{
-				fdict.read(buffer, record.length * sizeof(char));
+				dict_file.read(buffer, record.length * sizeof(char));
 				if (memcmp(buffer, rest.c_str(), record.length))
 				{
-					fdict.seekg(record.length * sizeof(char) + sizeof(size_t),
+					dict_file.seekg(record.length * sizeof(char) + sizeof(size_t),
 								std::ios_base::cur);
 					continue;
 				}
 			}
 
 			/* Offset in postings file */
-			fdict.read((char *) &post_offset, sizeof(uint32_t));
+			dict_file.read((char *) &post_offset, sizeof(uint32_t));
 
 			/* Read postings */
-			fpost.seekg(post_offset);
-			fpost.read((char *) &psize, sizeof(PSize));
+			post_file.seekg(post_offset);
+			post_file.read((char *) &psize, sizeof(PSize));
 			for (int i = 0; i < psize; i++)
 			{
 				uint32_t value;
 
-				fpost.read((char *) &value, sizeof(uint32_t));
+				post_file.read((char *) &value, sizeof(uint32_t));
 				postings.push_back(value);
 			}
 

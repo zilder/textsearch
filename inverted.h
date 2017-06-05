@@ -16,7 +16,8 @@ class BulkLoader
 {
 	using Map = std::map<std::string, std::list<uint32_t> >;
 private:
-	Map words;
+	Map		words;
+
 public:
 	void insert(char *text, uint32_t docId);
 	void print();
@@ -26,8 +27,15 @@ public:
 class InvertedIndex
 {
 private:
-	PrefixTree	*prefixes;
-	char		*name;
+	bool			initialized;
+	std::ifstream	dict_file;
+	std::ifstream	post_file;
+	PrefixTree	   *prefixes;
+	char		   *name;
+
+private:
+	void init();
+
 public:
 	InvertedIndex(const char *storage_name);
 	~InvertedIndex();
